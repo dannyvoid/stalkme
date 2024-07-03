@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="activity">
+            <div id="mouse-data">
+                <p id="left-clicks" class="activity-text">Left Clicks: 0</p>
+                <p id="right-clicks" class="activity-text">Right Clicks: 0</p>
+                <p id="middle-clicks" class="activity-text">Middle Clicks: 0</p>
+                <p id="mouse-movement" class="activity-text">Mouse Movement: 0 inches</p>
+            </div>
+            <div id="keyboard-data">
+                <p id="key-presses" class="activity-text">Keypresses: 0</p>
+            </div>
+            <div id="log-data">
+                <p id="log-file-size" class="activity-text">Log File Size: 0 KB</p>
+                <p id="logging-since" class="activity-text">Logging Since: 0</p>
+            </div>
+        </div>
+        <canvas id="activity-chart"></canvas>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
