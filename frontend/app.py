@@ -11,11 +11,10 @@ app = Sanic(__name__)
 
 active_sessions = set()
 user_data = {}
-session_last_activity = {}  # Store last activity time for each session ID
+session_last_activity = {}
 
 log_file = Path(__file__).parent.parent / "persistent" / "log.csv"
 
-# Session expiry time in seconds (e.g., 30 minutes)
 SESSION_EXPIRY_SECONDS = 30 * 60
 
 
@@ -38,7 +37,7 @@ def get_real_ip(request: Request):
 
 async def expire_sessions():
     while True:
-        await asyncio.sleep(60)  # Check every minute for expired sessions
+        await asyncio.sleep(60)
         now = datetime.datetime.now()
         expired_sessions = []
         for session_id, last_activity in session_last_activity.items():
@@ -58,10 +57,7 @@ async def track_active_users(request: Request):
     session_id = get_unique_session_id(request)
     active_sessions.add(session_id)
     request.ctx.session_id = session_id
-    session_last_activity[session_id] = (
-        datetime.datetime.now()
-    )  # Update last activity time
-    # Track additional user information
+    session_last_activity[session_id] = datetime.datetime.now()
     user_data[session_id] = {
         "ip": get_real_ip(request),
         "user_agent": request.headers.get("user-agent", "unknown"),
@@ -156,7 +152,6 @@ if __name__ == "__main__":
     host = "10.0.0.200"
     port = 6930
 
-    # Start session expiry background task
     app.add_task(expire_sessions())
 
     app.run(host=host, port=port)
