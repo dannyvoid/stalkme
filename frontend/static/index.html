@@ -2,29 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Activity Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.8">
+    <title>Stalker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inconsolata&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
+        <canvas id="activity-chart"></canvas>
         <div id="activity">
             <div id="mouse-data">
-                <p id="left-clicks" class="activity-text">Left Clicks: 0</p>
-                <p id="right-clicks" class="activity-text">Right Clicks: 0</p>
-                <p id="middle-clicks" class="activity-text">Middle Clicks: 0</p>
-                <p id="mouse-movement" class="activity-text">Mouse Movement: 0 inches</p>
+                <p id="left-clicks" class="activity-text">Left Clicks <span class="logger-value">0</span></p>
+                <p id="right-clicks" class="activity-text">Right Clicks <span class="logger-value">0</span></p>
+                <p id="middle-clicks" class="activity-text">Middle Clicks <span class="logger-value">0</span></p>
+                <p id="mouse-movement" class="activity-text">Mouse Movement <span class="logger-value">0</span> inches</p>
             </div>
             <div id="keyboard-data">
-                <p id="key-presses" class="activity-text">Keypresses: 0</p>
+                <p id="key-presses" class="activity-text">Keypresses <span class="logger-value">0</span></p>
+                
+            </div>
+            <div id="controller-data">
+                <p id="gamepad-actions" class="activity-text">Gamepad Actions <span class="logger-value">0</span></p>
             </div>
             <div id="log-data">
-                <p id="log-file-size" class="activity-text">Log File Size: 0 KB</p>
-                <p id="logging-since" class="activity-text">Logging Since: 0</p>
+                <p id="log-file-size" class="activity-text">Log File Size <span class="logger-value">0KB</span></p>
+                <p id="logging-since" class="activity-text">Logging Since <br /><span class="logger-value">0</span></p>
             </div>
         </div>
-        <canvas id="activity-chart"></canvas>
     </div>
     <script src="script.js"></script>
 </body>
