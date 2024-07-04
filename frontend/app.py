@@ -1,12 +1,77 @@
 import os
+import uuid
 import datetime
 import pandas as pd
 from pathlib import Path
 from sanic import Sanic, response
+from sanic.request import Request
+import asyncio
 
 app = Sanic(__name__)
 
+active_sessions = set()
+user_data = {}
+session_last_activity = {}  # Store last activity time for each session ID
+
 log_file = Path(__file__).parent.parent / "persistent" / "log.csv"
+
+# Session expiry time in seconds (e.g., 30 minutes)
+SESSION_EXPIRY_SECONDS = 30 * 60
+
+
+def get_unique_session_id(request: Request):
+    session_id = request.cookies.get("session_id")
+    if not session_id or session_id not in active_sessions:
+        session_id = str(uuid.uuid4())
+    return session_id
+
+
+def get_real_ip(request: Request):
+    if "X-Forwarded-For" in request.headers:
+        ip = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+    elif "X-Real-IP" in request.headers:
+        ip = request.headers.get("X-Real-IP")
+    else:
+        ip = request.ip
+    return ip
+
+
+async def expire_sessions():
+    while True:
+        await asyncio.sleep(60)  # Check every minute for expired sessions
+        now = datetime.datetime.now()
+        expired_sessions = []
+        for session_id, last_activity in session_last_activity.items():
+            if (now - last_activity).total_seconds() > SESSION_EXPIRY_SECONDS:
+                expired_sessions.append(session_id)
+
+        for session_id in expired_sessions:
+            active_sessions.discard(session_id)
+            if session_id in user_data:
+                del user_data[session_id]
+            if session_id in session_last_activity:
+                del session_last_activity[session_id]
+
+
+@app.middleware("request")
+async def track_active_users(request: Request):
+    session_id = get_unique_session_id(request)
+    active_sessions.add(session_id)
+    request.ctx.session_id = session_id
+    session_last_activity[session_id] = (
+        datetime.datetime.now()
+    )  # Update last activity time
+    # Track additional user information
+    user_data[session_id] = {
+        "ip": get_real_ip(request),
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"),
+    }
+
+
+@app.middleware("response")
+async def add_session_cookie(request: Request, response):
+    response.cookies.add_cookie("session_id", request.ctx.session_id)
 
 
 async def parse_csv() -> dict:
@@ -19,6 +84,7 @@ async def parse_csv() -> dict:
         "clicks_left": 0,
         "clicks_right": 0,
         "clicks_middle": 0,
+        "gamepad_actions": 0,
         "mouse_movement": 0,
         "key_presses": 0,
         "__current_time__": ct,
@@ -49,10 +115,9 @@ async def parse_csv() -> dict:
         (df["event"] == "Pressed") & (df["button"] == "Button.middle")
     ].shape[0]
     data["key_presses"] = df[df["event"] == "Key Pressed"].shape[0]
-
-    if "distance_in_inches" in df.columns:
-        data["mouse_movement"] = df["distance_in_inches"].sum()
-        data["mouse_movement"] = round(data["mouse_movement"], 0)
+    data["gamepad_actions"] = df[df["event"] == "Gamepad Pressed"].shape[0]
+    data["mouse_movement"] = df["distance_in_inches"].sum()
+    data["mouse_movement"] = round(data["mouse_movement"], 0)
 
     return data
 
@@ -81,7 +146,17 @@ async def index(request):
     return await response.file(index_path)
 
 
+@app.route("/traffic")
+async def serve_traffic(request):
+    traffic_data = {"users": len(active_sessions), "user_data": user_data}
+    return response.json(traffic_data)
+
+
 if __name__ == "__main__":
-    host = "0.0.0.0"
+    host = "10.0.0.200"
     port = 6930
+
+    # Start session expiry background task
+    app.add_task(expire_sessions())
+
     app.run(host=host, port=port)
