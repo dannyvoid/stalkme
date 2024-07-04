@@ -1,22 +1,27 @@
+let myChart;
+let isInitialLoad = true;
+
 async function fetchDataAndUpdate() {
     try {
         const response = await fetch('/data');
         const data = await response.json();
         updateUI(data);
         updateChart(data);
+        isInitialLoad = false;
     } catch (error) {
         console.error('Failed to fetch data:', error);
     }
 }
 
 function updateUI(data) {
-    document.getElementById('left-clicks').textContent = `Left Clicks: ${formatNumber(data['clicks_left'])}`;
-    document.getElementById('right-clicks').textContent = `Right Clicks: ${formatNumber(data['clicks_right'])}`;
-    document.getElementById('middle-clicks').textContent = `Middle Clicks: ${formatNumber(data['clicks_middle'])}`;
-    document.getElementById('key-presses').textContent = `Keypresses: ${formatNumber(data['key_presses'])}`;
-    document.getElementById('mouse-movement').textContent = `Mouse Movement: ${formatNumber(data['mouse_movement'])} inches`;
-    document.getElementById('log-file-size').textContent = `Log File Size: ${formatFileSize(data['__logging_size__'])}`;
-    document.getElementById('logging-since').textContent = `Logging Since: ${data['__logging_since__']}`;
+    document.getElementById('left-clicks').innerHTML = `Left Clicks <span class="logger-value">${formatNumber(data['clicks_left'])}</span>`;
+    document.getElementById('right-clicks').innerHTML = `Right Clicks <span class="logger-value">${formatNumber(data['clicks_right'])}</span>`;
+    document.getElementById('middle-clicks').innerHTML = `Middle Clicks <span class="logger-value">${formatNumber(data['clicks_middle'])}</span>`;
+    document.getElementById('key-presses').innerHTML = `Keypresses <span class="logger-value">${formatNumber(data['key_presses'])}</span>`;
+    document.getElementById('gamepad-actions').innerHTML = `Gamepad Actions <span class="logger-value">${formatNumber(data['gamepad_actions'])}</span>`;
+    document.getElementById('mouse-movement').innerHTML = `Mouse Movement ${randomInchesConversion(data['mouse_movement'], false)}`;
+    document.getElementById('log-file-size').innerHTML = `Log File Size <span class="logger-value">${formatFileSize(data['__logging_size__'])}</span>`;
+    document.getElementById('logging-since').innerHTML = `Logging Since <span class="logger-value"><br />${data['__logging_since__']}</span>`;
 }
 
 function formatFileSize(sizeInKB) {
@@ -38,12 +43,90 @@ const formatNumber = (num) => {
     }
 };
 
+const randomInchesConversion = (inches, includeCommas = true) => {
+    const wrapValue = (value, unit, singularUnit) => {
+        const isSingular = parseFloat(value) === 1 && !value.includes('.');
+        const appropriateUnit = isSingular ? singularUnit : unit;
+
+        if (includeCommas) {
+            value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        const combinedLength = value.length + appropriateUnit.length;
+        if (combinedLength >= 22) {
+            return `<br /><span class="logger-value">${value}</span><br />${appropriateUnit}`;
+        }
+        return `<span class="logger-value">${value}</span> ${appropriateUnit}`;
+    };
+
+    const conversionFunctions = {
+        inchesToInches: (inches) => {
+            return wrapValue(inches.toString(), "inches", "inch");
+        },
+        inchesToFeetRounded: (inches) => {
+            const feet = Math.floor(inches / 12);
+            return wrapValue(feet.toString(), "feet", "foot");
+        },
+        inchesToMilesRounded: (inches) => {
+            const miles = (inches / 63360).toFixed(3);
+            return wrapValue(miles.toString(), "miles", "mile");
+        },
+        inchesToMetersRounded: (inches) => {
+            const meters = Math.floor(inches / 39.3701);
+            return wrapValue(meters.toString(), "meters", "meter");
+        },
+        inchesToOlympicPools: (inches) => {
+            const pools = (inches / 1968.5).toFixed(3);
+            return wrapValue(pools, "Olympic swimming pools", "Olympic swimming pool");
+        },
+        inchesToBasketballCourts: (inches) => {
+            const courts = (inches / 1128).toFixed(3);
+            return wrapValue(courts, "basketball courts", "basketball court");
+        },
+        inchesToEiffelTowers: (inches) => {
+            const towers = (inches / 12756).toFixed(3);
+            return wrapValue(towers, "Eiffel Towers", "Eiffel Tower");
+        },
+        inchesToFastAndTheFuriousRunWays: (inches) => {
+            const runWays = (inches / 63360 / 18.37).toFixed(3);
+            return wrapValue(runWays, "Fast & Furious 6 runways", "Fast & Furious 6 runway");
+        }
+    };
+
+    const conversionKeys = Object.keys(conversionFunctions);
+
+    const weights = {
+        inchesToInches: 100,
+        inchesToFeetRounded: 100,
+        inchesToMilesRounded: 100,
+        inchesToMetersRounded: 100,
+        inchesToOlympicPools: 1,
+        inchesToBasketballCourts: 1,
+        inchesToEiffelTowers: 1,
+        inchesToFastAndTheFuriousRunWays: 0.5,
+    };
+
+    const weightedConversions = [];
+
+    for (const key of conversionKeys) {
+        for (let i = 0; i < weights[key]; i++) {
+            weightedConversions.push(conversionFunctions[key]);
+        }
+    }
+
+    const randomConversion = weightedConversions[Math.floor(Math.random() * weightedConversions.length)];
+    return randomConversion(inches);
+};
+
+
+
 function updateChart(data) {
     const labelMappings = {
         'clicks_left': 'Left Clicks',
         'clicks_middle': 'Middle Clicks',
         'clicks_right': 'Right Clicks',
         'key_presses': 'Keypresses',
+        'gamepad_actions': 'Gamepad Actions',
         'mouse_movement': 'Mouse Movement',
     };
 
@@ -57,59 +140,90 @@ function updateChart(data) {
             data: [data[filteredKeys[index]]],
             backgroundColor: getBackgroundColor(index),
             categoryPercentage: 0.75,
-            hoverBackgroundColor: 'rgba(255, 255, 255, 0.2)',
+            hoverBackgroundColor: 'rgba(55, 250, 178, 1)',
         });
     });
 
-    var ctx = document.getElementById('activity-chart').getContext('2d');
-    var myChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Current'],
-            datasets: datasets,
-
-        },
-        options: {
-            responsive: false,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    display: true,
-                },
-                y: {
-                    type: "logarithmic",
-                    suggestedMax: 100000,
-                    beginAtZero: true,
-                    display: false,
-                },
+    if (myChart) {
+        myChart.data.datasets = datasets;
+        myChart.options.animation = isInitialLoad ? {} : false; // Disable animation after the initial load
+        myChart.update();
+    } else {
+        var ctx = document.getElementById('activity-chart').getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Current'],
+                datasets: datasets,
             },
-            plugins: {
-                legend: {
-                    labels: {
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                animation: {
+                    duration: 3000, // Animation duration for the initial load
+                },
+                scales: {
+                    x: {
+                        display: false,
+                    },
+                    y: {
+                        type: "logarithmic",
+                        suggestedMax: 100000,
+                        beginAtZero: true,
+                        display: false,
+                    },
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#fff'
+                        },
+                        onClick: (e) => e.stopPropagation(), // Disable legend click behavior
+                        title: {
+                            display: true,
+                            text: 'Stalk Me',
+                            color: '#37fab2',
+                            font: {
+                                size: 24,
+                                family: 'Inconsolata, monospace',
+                                weight: 'bold',
+                            }
+                        }
+                    },
+                    title: {
+                        display: false,
+                        text: 'Activity Tracker',
                         color: '#fff'
-                    }
-                },
-                title: {
-                    display: false,
-                    text: 'Activity Tracker',
-                    color: '#fff'
-                },
-                tooltip: {
-                    enabled: true
-                },
-                autocolors: true,
+                    },
+                    tooltip: {
+                        enabled: true,
+                    },
+                    autocolors: true,
+                    afterDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.shadowColor = '#37fab2';
+                        ctx.shadowBlur = 5;
+                        ctx.fillStyle = '#37fab2';
+                        ctx.font = Chart.helpers.fontString(24, 'bold', 'Inconsolata, monospace');
+                        ctx.fillText('Stalk Me', chart.width / 2, 40);
+                        ctx.restore();
+                    },
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 function getBackgroundColor(index) {
     const colors = [
-        'rgba(255, 99, 132, 0.7)',
-        'rgba(54, 162, 235, 0.7)',
-        'rgba(255, 206, 86, 0.7)',
-        'rgba(75, 192, 192, 0.7)',
-        'rgba(153, 102, 255, 0.7)'
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(75, 192, 192, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(255, 159, 64, 1)',
+        
     ];
     return colors[index % colors.length];
 }
