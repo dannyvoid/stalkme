@@ -1,76 +1,21 @@
 import os
-import uuid
 import datetime
 import pandas as pd
+
+import asyncio
+import concurrent.futures
+
 from pathlib import Path
 from sanic import Sanic, response
-from sanic.request import Request
-import asyncio
 
 app = Sanic(__name__)
 
-active_sessions = set()
-user_data = {}
-session_last_activity = {}
-
 log_file = Path(__file__).parent.parent / "persistent" / "log.csv"
 
-SESSION_EXPIRY_SECONDS = 30 * 60
 
+async def fetch_csv_data() -> dict:
+    start_time = datetime.datetime.now()
 
-def get_unique_session_id(request: Request):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in active_sessions:
-        session_id = str(uuid.uuid4())
-    return session_id
-
-
-def get_real_ip(request: Request):
-    if "X-Forwarded-For" in request.headers:
-        ip = request.headers.get("X-Forwarded-For").split(",")[0].strip()
-    elif "X-Real-IP" in request.headers:
-        ip = request.headers.get("X-Real-IP")
-    else:
-        ip = request.ip
-    return ip
-
-
-async def expire_sessions():
-    while True:
-        await asyncio.sleep(60)
-        now = datetime.datetime.now()
-        expired_sessions = []
-        for session_id, last_activity in session_last_activity.items():
-            if (now - last_activity).total_seconds() > SESSION_EXPIRY_SECONDS:
-                expired_sessions.append(session_id)
-
-        for session_id in expired_sessions:
-            active_sessions.discard(session_id)
-            if session_id in user_data:
-                del user_data[session_id]
-            if session_id in session_last_activity:
-                del session_last_activity[session_id]
-
-
-@app.middleware("request")
-async def track_active_users(request: Request):
-    session_id = get_unique_session_id(request)
-    active_sessions.add(session_id)
-    request.ctx.session_id = session_id
-    session_last_activity[session_id] = datetime.datetime.now()
-    user_data[session_id] = {
-        "ip": get_real_ip(request),
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"),
-    }
-
-
-@app.middleware("response")
-async def add_session_cookie(request: Request, response):
-    response.cookies.add_cookie("session_id", request.ctx.session_id)
-
-
-async def parse_csv() -> dict:
     ct = datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
     since = datetime.datetime.fromtimestamp(os.path.getctime(log_file))
     since = since.strftime("%Y-%m-%d %I:%M:%S %p")
@@ -88,9 +33,13 @@ async def parse_csv() -> dict:
         "__logging_size__": size,
     }
 
+    dtype = {"distance_in_inches": float}
     try:
-        dtype = {"distance_in_inches": float}
-        df = pd.read_csv(log_file, dtype=dtype)
+        loop = asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            df = await loop.run_in_executor(
+                pool, lambda: pd.read_csv(log_file, dtype=dtype)
+            )
     except pd.errors.EmptyDataError:
         print(f"Empty or unreadable file: {log_file}")
         return data
@@ -115,12 +64,15 @@ async def parse_csv() -> dict:
     data["mouse_movement"] = df["distance_in_inches"].sum()
     data["mouse_movement"] = round(data["mouse_movement"], 0)
 
+    end_time = datetime.datetime.now()
+    print(f"Data fetched in {end_time - start_time}")
+
     return data
 
 
 @app.route("/data")
 async def get_data(request):
-    data = await parse_csv()
+    data = await fetch_csv_data()
     return response.json(data)
 
 
@@ -142,16 +94,8 @@ async def index(request):
     return await response.file(index_path)
 
 
-@app.route("/traffic")
-async def serve_traffic(request):
-    traffic_data = {"users": len(active_sessions), "user_data": user_data}
-    return response.json(traffic_data)
-
-
 if __name__ == "__main__":
     host = "10.0.0.200"
     port = 6930
-
-    app.add_task(expire_sessions())
 
     app.run(host=host, port=port)

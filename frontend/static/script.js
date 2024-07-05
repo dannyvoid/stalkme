@@ -63,17 +63,25 @@ const randomInchesConversion = (inches, includeCommas = true) => {
         inchesToInches: (inches) => {
             return wrapValue(inches.toString(), "inches", "inch");
         },
-        inchesToFeetRounded: (inches) => {
-            const feet = Math.floor(inches / 12);
+        inchesToFeet: (inches) => {
+            const feet = (inches / 12).toFixed(3);
             return wrapValue(feet.toString(), "feet", "foot");
         },
-        inchesToMilesRounded: (inches) => {
+        inchesToMiles: (inches) => {
             const miles = (inches / 63360).toFixed(3);
             return wrapValue(miles.toString(), "miles", "mile");
         },
-        inchesToMetersRounded: (inches) => {
-            const meters = Math.floor(inches / 39.3701);
+        inchesToMeters: (inches) => {
+            const meters = (inches / 39.3701).toFixed(3);
             return wrapValue(meters.toString(), "meters", "meter");
+        },
+        inchesToYards: (inches) => {
+            const yards = (inches / 36).toFixed(3);
+            return wrapValue(yards.toString(), "yards", "yard");
+        },
+        inchesToFootballFields: (inches) => {
+            const fields = (inches / 3600).toFixed(3);
+            return wrapValue(fields.toString(), "football fields", "football field");
         },
         inchesToOlympicPools: (inches) => {
             const pools = (inches / 1968.5).toFixed(3);
@@ -90,6 +98,11 @@ const randomInchesConversion = (inches, includeCommas = true) => {
         inchesToFastAndTheFuriousRunWays: (inches) => {
             const runWays = (inches / 63360 / 18.37).toFixed(3);
             return wrapValue(runWays, "Fast & Furious 6 runways", "Fast & Furious 6 runway");
+        },
+        inchesToRealLife: (inches) => {
+            // we just divide our inches by the dpi of the mouse (400)
+            const realLife = (inches / 400).toFixed(3);
+            return wrapValue(realLife, "real life inches", "real life inch");
         }
     };
 
@@ -97,13 +110,16 @@ const randomInchesConversion = (inches, includeCommas = true) => {
 
     const weights = {
         inchesToInches: 100,
-        inchesToFeetRounded: 100,
-        inchesToMilesRounded: 100,
-        inchesToMetersRounded: 100,
+        inchesToFeet: 100,
+        inchesToMiles: 100,
+        inchesToMeters: 100,
+        inchesToYards: 25,
+        inchesToFootballFields: 1,
         inchesToOlympicPools: 1,
         inchesToBasketballCourts: 1,
         inchesToEiffelTowers: 1,
         inchesToFastAndTheFuriousRunWays: 0.5,
+        inchesToRealLife: 5
     };
 
     const weightedConversions = [];
@@ -181,7 +197,7 @@ function updateChart(data) {
                         onClick: (e) => e.stopPropagation(), // Disable legend click behavior
                         title: {
                             display: true,
-                            text: 'Stalk Me',
+                            text: 'Shut-in Simulator',
                             color: '#37fab2',
                             font: {
                                 size: 24,
