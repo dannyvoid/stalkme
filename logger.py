@@ -16,31 +16,13 @@ log_file = Path(__file__).parent / "persistent" / "log.db"
 
 prev_position = None
 prev_timestamp = 0
+
 debounce_threshold = 0.001  # seconds
 
 log_queue = []
 lock = threading.Lock()
 
 log_interval = 60
-
-# Track the state of the triggers
-trigger_states = {"ABS_Z": False, "ABS_RZ": False}
-
-# Track the state of the joysticks
-joystick_states = {
-    "ABS_X": False,
-    "ABS_Y": False,
-    "ABS_RX": False,
-    "ABS_RY": False,
-}
-
-# Define deadzone thresholds for joysticks
-joystick_deadzone = {
-    "ABS_X": 255 * 0.2,
-    "ABS_Y": 32768 * 0.15,
-    "ABS_RX": 255 * 0.2,
-    "ABS_RY": 32768 * 0.15,
-}
 
 
 def initialize_db(db_file):
@@ -145,7 +127,28 @@ def on_release(key) -> None:
 
 
 def handle_gamepad_events() -> None:
+
+    # Track the state of the triggers
+    trigger_states = {"ABS_Z": False, "ABS_RZ": False}
+
+    # Track the state of the joysticks
+    joystick_states = {
+        "ABS_X": False,
+        "ABS_Y": False,
+        "ABS_RX": False,
+        "ABS_RY": False,
+    }
+
+    # Define deadzone thresholds for joysticks
+    joystick_deadzone = {
+        "ABS_X": 255 * 0.2,
+        "ABS_Y": 32768 * 0.15,
+        "ABS_RX": 255 * 0.2,
+        "ABS_RY": 32768 * 0.15,
+    }
+
     trigger_threshold = 255 * 0.45  # 45% of the range
+
     while True:
         try:
             events = get_gamepad()

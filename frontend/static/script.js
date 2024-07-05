@@ -22,6 +22,7 @@ function updateUI(data) {
     document.getElementById('mouse-movement').innerHTML = `Mouse Movement ${randomInchesConversion(data['mouse_movement'], false)}`;
     document.getElementById('log-file-size').innerHTML = `Log File Size <span class="logger-value">${formatFileSize(data['__logging_size__'])}</span>`;
     document.getElementById('logging-since').innerHTML = `Logging Since <span class="logger-value"><br />${data['__logging_since__']}</span>`;
+    document.getElementById('current-time').innerHTML = `Latest Update <span class="logger-value"><br />${data['__current_time__']}</span>`;
 }
 
 function formatFileSize(sizeInKB) {
@@ -119,7 +120,6 @@ const randomInchesConversion = (inches, includeCommas = true) => {
         inchesToBasketballCourts: 1,
         inchesToEiffelTowers: 1,
         inchesToFastAndTheFuriousRunWays: 0.5,
-        inchesToRealLife: 5
     };
 
     const weightedConversions = [];
