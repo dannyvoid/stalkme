@@ -1,26 +1,23 @@
 import os
 import datetime
-import pandas as pd
-
-import asyncio
-import concurrent.futures
-
+import sqlite3
 from pathlib import Path
 from sanic import Sanic, response
 
 app = Sanic(__name__)
 
-log_file = Path(__file__).parent.parent / "persistent" / "log.csv"
+log_file = Path(__file__).parent.parent / "persistent" / "log.db"
+
+cached_data = None
+cached_timestamp = None
+
+debug = True
 
 
-async def fetch_csv_data() -> dict:
+async def fetch_db_data() -> dict:
+    global cached_data, cached_timestamp
+
     start_time = datetime.datetime.now()
-
-    ct = datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
-    since = datetime.datetime.fromtimestamp(os.path.getctime(log_file))
-    since = since.strftime("%Y-%m-%d %I:%M:%S %p")
-    size = os.path.getsize(log_file) / 1024
-
     data = {
         "clicks_left": 0,
         "clicks_right": 0,
@@ -28,51 +25,75 @@ async def fetch_csv_data() -> dict:
         "gamepad_actions": 0,
         "mouse_movement": 0,
         "key_presses": 0,
-        "__current_time__": ct,
-        "__logging_since__": since,
-        "__logging_size__": size,
+        "__current_time__": datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"),
+        "__logging_since__": datetime.datetime.fromtimestamp(
+            os.path.getctime(log_file.with_suffix(".csv"))
+        ).strftime("%Y-%m-%d %I:%M:%S %p"),
+        "__logging_size__": os.path.getsize(log_file) / 1024,
     }
 
-    dtype = {"distance_in_inches": float}
-    try:
-        loop = asyncio.get_running_loop()
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            df = await loop.run_in_executor(
-                pool, lambda: pd.read_csv(log_file, dtype=dtype)
-            )
-    except pd.errors.EmptyDataError:
-        print(f"Empty or unreadable file: {log_file}")
-        return data
-    except pd.errors.ParserError:
-        print(f"Error parsing CSV file: {log_file}")
-        return data
-    except Exception as e:
-        print(f"Unexpected error reading CSV file: {e}")
-        return data
+    with sqlite3.connect(log_file) as conn:
+        try:
+            data["clicks_left"] = count_clicks(conn, "Pressed", "Button.left")
+            data["clicks_right"] = count_clicks(conn, "Pressed", "Button.right")
+            data["clicks_middle"] = count_clicks(conn, "Pressed", "Button.middle")
+            data["key_presses"] = count_events(conn, "Key Pressed")
+            data["gamepad_actions"] = count_events(conn, "Gamepad Pressed")
+            data["mouse_movement"] = calculate_mouse_movement(conn)
 
-    data["clicks_left"] = df[
-        (df["event"] == "Pressed") & (df["button"] == "Button.left")
-    ].shape[0]
-    data["clicks_right"] = df[
-        (df["event"] == "Pressed") & (df["button"] == "Button.right")
-    ].shape[0]
-    data["clicks_middle"] = df[
-        (df["event"] == "Pressed") & (df["button"] == "Button.middle")
-    ].shape[0]
-    data["key_presses"] = df[df["event"] == "Key Pressed"].shape[0]
-    data["gamepad_actions"] = df[df["event"] == "Gamepad Pressed"].shape[0]
-    data["mouse_movement"] = df["distance_in_inches"].sum()
-    data["mouse_movement"] = round(data["mouse_movement"], 0)
+        except sqlite3.Error as e:
+            print(f"SQLite error: {e}")
 
     end_time = datetime.datetime.now()
-    print(f"Data fetched in {end_time - start_time}")
 
+    cached_data = data
+    cached_timestamp = datetime.datetime.now()
+
+    if debug:
+        print(f"Data fetched in {end_time - start_time}")
+        print(data)
     return data
+
+
+def count_clicks(conn, event_type, button):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COUNT(*) FROM events WHERE event = ? AND button = ?",
+        (event_type, button),
+    )
+    return cursor.fetchone()[0]
+
+
+def count_events(conn, event_type):
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM events WHERE event = ?", (event_type,))
+    return cursor.fetchone()[0]
+
+
+def calculate_mouse_movement(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT SUM(distance_in_inches) FROM events")
+    total_mouse_movement = cursor.fetchone()[0] or 0
+    return round(total_mouse_movement, 0)
 
 
 @app.route("/data")
 async def get_data(request):
-    data = await fetch_csv_data()
+    global cached_data, cached_timestamp
+
+    # Check if cached data exists and is fresh (within a reasonable timeframe)
+    if (
+        cached_data is None
+        or (datetime.datetime.now() - cached_timestamp).total_seconds() > 60
+    ):
+        # If not cached or stale, fetch new data
+        data = await fetch_db_data()
+        cached_data = data  # Update cached data
+        cached_timestamp = datetime.datetime.now()  # Update timestamp
+    else:
+        # If cached and fresh, return cached data
+        data = cached_data
+
     return response.json(data)
 
 

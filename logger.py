@@ -1,4 +1,4 @@
-import csv
+import sqlite3
 import math
 import time
 import threading
@@ -12,7 +12,7 @@ monitor_diagonal_px = math.sqrt(monitor_width_px**2 + monitor_height_px**2)
 monitor_diagonal_in = 27
 dpi = monitor_diagonal_px / monitor_diagonal_in
 
-log_file = Path(__file__).parent / "persistent" / "log.csv"
+log_file = Path(__file__).parent / "persistent" / "log.db"
 
 prev_position = None
 prev_timestamp = 0
@@ -21,10 +21,10 @@ debounce_threshold = 0.001  # seconds
 log_queue = []
 lock = threading.Lock()
 
-log_interval = 20
+log_interval = 60
 
 # Track the state of the triggers
-trigger_states = {"ABS_Z": False, "ABS_RZ": False}  # Left trigger  # Right trigger
+trigger_states = {"ABS_Z": False, "ABS_RZ": False}
 
 # Track the state of the joysticks
 joystick_states = {
@@ -32,7 +32,7 @@ joystick_states = {
     "ABS_Y": False,
     "ABS_RX": False,
     "ABS_RY": False,
-}  # Left joystick  # Right joystick
+}
 
 # Define deadzone thresholds for joysticks
 joystick_deadzone = {
@@ -43,39 +43,79 @@ joystick_deadzone = {
 }
 
 
-def initialize_log_file(log_file_path: Path) -> None:
-    log_file_path = Path(log_file_path)
-    if not log_file_path.exists() or log_file_path.stat().st_size == 0:
-        log_file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_file, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                ["timestamp", "event", "button", "position", "distance_in_inches"]
-            )
+def initialize_db(db_file):
+    conn = sqlite3.connect(db_file)
+    c = conn.cursor()
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp REAL,
+            event TEXT,
+            button TEXT,
+            position TEXT,
+            distance_in_inches REAL
+        )
+    """
+    )
+    conn.commit()
+    conn.close()
 
 
-def log_event(event, button=None, position=None, distance_in_inches=None) -> None:
-    print_event_data = False
+def log_event(event_type, button=None, position=None, distance_in_inches=None):
     timestamp = time.time()
-    event_data = [timestamp, event, button, position, distance_in_inches]
 
-    if print_event_data:
-        print(event_data)
+    # Convert button to string if it's not None
+    if button is not None:
+        button = str(button)
+
+    # Convert position tuple to a string or None if position is None
+    if position:
+        position_str = f"({position[0]}, {position[1]})"
+    else:
+        position_str = None
+
+    event_data = (timestamp, event_type, button, position_str, distance_in_inches)
 
     with lock:
         log_queue.append(event_data)
 
 
 def calculate_distance(x1, y1, x2, y2) -> float:
-    print_calculation = False
     distance_px = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
     distance_in = distance_px / dpi
-
-    if print_calculation:
-        print(
-            f"calculate_distance: ({x1}, {y1}) -> ({x2}, {y2}) = {distance_px} px, {distance_in} in"
-        )
     return distance_in
+
+
+def flush_log_queue(interval):
+    conn = sqlite3.connect(log_file)
+    c = conn.cursor()
+
+    while True:
+        if log_queue:
+            with lock:
+                events_to_write = log_queue[:]
+                log_queue.clear()
+
+            for event in events_to_write:
+                timestamp, event_type, button, position, distance_in_inches = event
+                c.execute(
+                    """
+                    INSERT INTO events (timestamp, event, button, position, distance_in_inches)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (timestamp, event_type, button, position, distance_in_inches),
+                )
+
+            conn.commit()
+            print(f"Events written: {len(events_to_write)}")
+
+        if interval > 0:
+            time.sleep(interval)
+        else:
+            break
+
+    conn.close()
 
 
 def on_move(x, y) -> None:
@@ -171,31 +211,10 @@ def print_config() -> None:
     print()
 
 
-def flush_log_queue(interval: int) -> None:
-    global log_queue
-    print_event = False
-    while True:
-        if log_queue:
-            with lock:
-                events_to_write = log_queue[:]
-                log_queue.clear()
-            with open(log_file, "a", newline="") as f:
-                writer = csv.writer(f)
-                for event in events_to_write:
-                    writer.writerow(event)
-                    if print_event:
-                        print(event)
-                print(f"Events written: {len(events_to_write)}")
-        if interval > 0:
-            time.sleep(interval)
-        else:
-            break
-
-
 def main() -> None:
     print_config()
 
-    initialize_log_file(log_file)
+    initialize_db(log_file)
 
     mouse_listener = mouse.Listener(on_move=on_move, on_click=on_click)
     keyboard_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
